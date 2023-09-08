@@ -1,0 +1,39 @@
+#!/bin/bash
+#SBATCH --mem=4G
+#SBATCH --time=1440
+
+ml load Java
+
+# Verify cromwell directory, etc.
+CROMWELL_BINDIR=(~/.local/lib/cromwell)
+if [ ! -d ${CROMWELL_BINDIR} ]; then
+    echo "ERROR: Cromwell not installed at ${CROMWELL_BINDIR}, cannot continue."
+    exit 1
+fi
+CROMWELL_BIN=`ls ${CROMWELL_BINDIR}/cromwell-*.jar | sort -r | head -1`
+CROMWELL_VER=`echo $CROMWELL_BIN | sed -e's/.*cromwell-//' | sed -e's/\.jar$//'`
+echo "Using cromwell version ${CROMWELL_VER} at ${CROMWELL_BIN}."
+
+# Include workflow-options
+WORKFLOW_LOCAL=./workflow-options.json
+WORKFLOW_GLOBAL=${HOME}/.local/share/cromwell/workflow-options.json
+if [ -f ${WORKFLOW_LOCAL} ]; then
+    echo "Using local workflow-options file: ${WORKFLOW_LOCAL}."
+    CMDLINE_OPTS="--options=${WORKFLOW_LOCAL}"
+elif [ -f  ]; then
+    echo "Using global workflow-options file: ${WORKFLOW_GLOBAL}."
+    CMDLINE_OPTS="--options=${WORKFLOW_GLOBAL}"
+else
+    echo "No workflow-options available."
+    CMDLINE_OPTS=""
+fi
+
+# Call cromwell
+java \
+    -Xmx4G \
+    -Dconfig.file=$HOME/.local/share/cromwell/cromwell.conf \
+    -DLOG_MODE=standard \
+    -jar ~/.local/lib/cromwell/cromwell-85.jar \
+    run \
+        ${CMDLINE_OPTS} \
+        "$@"
