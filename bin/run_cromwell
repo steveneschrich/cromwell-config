@@ -17,10 +17,15 @@ echo "Using cromwell version ${CROMWELL_VER} at ${CROMWELL_BIN}."
 # Include workflow-options
 WORKFLOW_LOCAL=./workflow-options.json
 WORKFLOW_GLOBAL=${HOME}/.local/share/cromwell/workflow-options.json
-if [ -f ${WORKFLOW_LOCAL} ]; then
+if [ -f ${WORKFLOW_LOCAL} -a -f ${WORKFLOW_GLOBAL} ]; then
+    WORKFLOW_MERGED="./workflow-options-merged.json"
+    echo "Merging ${WORKFLOW_GLOBAL} and ${WORKFLOW_LOCAL} into ${WORKFLOW_MERGED}."
+    jq -s '.[0] + .[1]' ${WORKFLOW_GLOBAL} ${WORKFLOW_LOCAL} > ${WORKFLOW_MERGED}
+    CMDLINE_OPTS="--options=${WORKFLOW_MERGED}"
+elif [ -f ${WORKFLOW_LOCAL} ]; then
     echo "Using local workflow-options file: ${WORKFLOW_LOCAL}."
     CMDLINE_OPTS="--options=${WORKFLOW_LOCAL}"
-elif [ -f  ]; then
+elif [ -f ${WORKFLOW_GLOBAL} ]; then
     echo "Using global workflow-options file: ${WORKFLOW_GLOBAL}."
     CMDLINE_OPTS="--options=${WORKFLOW_GLOBAL}"
 else
@@ -28,12 +33,41 @@ else
     CMDLINE_OPTS=""
 fi
 
+# Include config(s)
+CROMWELL_CONFIG=${HOME}/.local/share/cromwell/cromwell.conf
+CROMWELL_CONFIG_LOCAL=cromwell.conf
+if [ -f ${CROMWELL_CONFIG} -a -f ${CROMWELL_CONFIG_LOCAL} ]; then
+    echo "Combining global config ${CROMWELL_CONFIG} and local config ${CROMWELL_CONFIG_LOCAL} into cromwell_merged.conf"
+cat > cromwell_merged.conf <<EOT
+include required("${CROMWELL_CONFIG}")
+include required(file("${CROMWELL_CONFIG_LOCAL}"))
+EOT
+
+    CMDLINE_CONFIG="-Dconfig.file=cromwell_merged.conf"
+elif [ -f ${CROMWELL_CONFIG} ]; then
+    CMDLINE_CONFIG="-Dconfig.file=${CROMWELL_CONFIG}"
+else
+    CMDLINE_CONFIG=""
+fi
+
+# Include inputs (if they exist)
+INPUTS=`pwd`/inputs.json
+if [ -f ${INPUTS} ]; then
+    echo "Using local input.json file: ${INPUTS}."
+    CMDLINE_INPUTS="--inputs ${INPUTS}"
+else
+    CMDLINE_INPUTS=""
+fi
+
 # Call cromwell
 java \
     -Xmx4G \
-    -Dconfig.file=$HOME/.local/share/cromwell/cromwell.conf \
+    ${CMDLINE_CONFIG} \
     -DLOG_MODE=standard \
-    -jar ~/.local/lib/cromwell/cromwell-85.jar \
+    -jar ${CROMWELL_BIN} \
     run \
         ${CMDLINE_OPTS} \
+        ${CMDLINE_INPUTS} \
         "$@"
+
+    
